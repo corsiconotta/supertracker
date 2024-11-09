@@ -1,101 +1,213 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState, useEffect } from 'react'
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useToast } from "@/components/ui/use-toast"
+import { db } from '@/lib/firebase'
+import { collection, query, orderBy, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { Pencil, Trash2 } from 'lucide-react'
+
+const VIAL_SIZE = 10 // ml
+const SHOT_SIZE = 0.11 // ml
+
+type ShotEntry = {
+  id?: string;
+  date: string;
+  brand: string;
+  type: string;
+  amountMl: string;
+  amountMg: string;
+  location: string;
+}
+
+export default function InsulinTracker() {
+  const [remainingInsulin, setRemainingInsulin] = useState(VIAL_SIZE)
+  const [shotsTaken, setShotsTaken] = useState(0)
+  const [shotEntries, setShotEntries] = useState<ShotEntry[]>([])
+  const [newShot, setNewShot] = useState<ShotEntry>({
+    date: '',
+    brand: '',
+    type: '',
+    amountMl: '',
+    amountMg: '',
+    location: ''
+  })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    const q = query(collection(db, 'insulin_entries'), orderBy('date', 'desc'))
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const entries: ShotEntry[] = []
+      querySnapshot.forEach((doc) => {
+        entries.push({ id: doc.id, ...doc.data() } as ShotEntry)
+      })
+      setShotEntries(entries)
+      updateRemainingInsulin(entries)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  const updateRemainingInsulin = (entries: ShotEntry[]) => {
+    const totalUsed = entries.reduce((total, entry) => total + parseFloat(entry.amountMl), 0)
+    setRemainingInsulin(Math.max(VIAL_SIZE - totalUsed, 0))
+    setShotsTaken(entries.length)
+  }
+
+  const registerShot = async () => {
+    if (remainingInsulin >= SHOT_SIZE) {
+      try {
+        if (editingId) {
+          await updateDoc(doc(db, 'insulin_entries', editingId), newShot)
+          setEditingId(null)
+          toast({
+            title: "Success",
+            description: "Shot updated in Firestore",
+          })
+        } else {
+          await addDoc(collection(db, 'insulin_entries'), newShot)
+          toast({
+            title: "Success",
+            description: "Shot registered and saved to Firestore",
+          })
+        }
+        setNewShot({
+          date: '',
+          brand: '',
+          type: '',
+          amountMl: '',
+          amountMg: '',
+          location: ''
+        })
+      } catch (error) {
+        console.error('Error saving entry:', error);
+        toast({
+          title: "Error",
+          description: "Failed to save entry to Firestore",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const editShot = (entry: ShotEntry) => {
+    setNewShot(entry)
+    setEditingId(entry.id!)
+  }
+
+  const deleteShot = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'insulin_entries', id))
+      toast({
+        title: "Success",
+        description: "Shot deleted from Firestore",
+      })
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete entry from Firestore",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const resetVial = () => {
+    setRemainingInsulin(VIAL_SIZE)
+    setShotsTaken(0)
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewShot(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  const remainingShots = Math.floor(remainingInsulin / SHOT_SIZE)
+  const daysRemaining = remainingShots
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader>
+        <CardTitle>Insulin Tracker</CardTitle>
+        <CardDescription>Track your insulin supply and usage</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="date">Date</Label>
+            <Input type="date" id="date" name="date" value={newShot.date} onChange={handleInputChange} />
+          </div>
+          <div>
+            <Label htmlFor="brand">Brand</Label>
+            <Input type="text" id="brand" name="brand" value={newShot.brand} onChange={handleInputChange} />
+          </div>
+          <div>
+            <Label htmlFor="type">Type</Label>
+            <Input type="text" id="type" name="type" value={newShot.type} onChange={handleInputChange} />
+          </div>
+          <div>
+            <Label htmlFor="amountMl">Amount (ml)</Label>
+            <Input type="number" id="amountMl" name="amountMl" value={newShot.amountMl} onChange={handleInputChange} />
+          </div>
+          <div>
+            <Label htmlFor="amountMg">Amount (mg)</Label>
+            <Input type="number" id="amountMg" name="amountMg" value={newShot.amountMg} onChange={handleInputChange} />
+          </div>
+          <div>
+            <Label htmlFor="location">Location</Label>
+            <Input type="text" id="location" name="location" value={newShot.location} onChange={handleInputChange} />
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+        <Button onClick={registerShot} className="w-full mt-4">{editingId ? 'Update' : 'Register'} Shot</Button>
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <div>Remaining Insulin: {remainingInsulin.toFixed(2)} ml</div>
+          <div>Shots Taken: {shotsTaken}</div>
+          <div>Estimated Shots Remaining: {remainingShots}</div>
+          <div>Estimated Days Remaining: {daysRemaining}</div>
+        </div>
+        <div className="mt-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Amount (ml)</TableHead>
+                <TableHead>Amount (mg)</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {shotEntries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>{entry.date}</TableCell>
+                  <TableCell>{entry.brand}</TableCell>
+                  <TableCell>{entry.type}</TableCell>
+                  <TableCell>{entry.amountMl}</TableCell>
+                  <TableCell>{entry.amountMg}</TableCell>
+                  <TableCell>{entry.location}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" onClick={() => editShot(entry)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteShot(entry.id!)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button variant="outline" onClick={resetVial} className="w-full">Reset Vial</Button>
+      </CardFooter>
+    </Card>
+  )
 }
