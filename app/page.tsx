@@ -29,13 +29,16 @@ export default function InsulinTracker() {
   const [shotsTaken, setShotsTaken] = useState(0)
   const [shotEntries, setShotEntries] = useState<ShotEntry[]>([])
   const [newShot, setNewShot] = useState<ShotEntry>({
-    date: '',
+    date: new Date().toISOString().split('T')[0], // Set today's date by default
     brand: '',
     type: '',
     amountMl: '',
     amountMg: '',
     location: ''
   })
+  const [isCustomBrand, setIsCustomBrand] = useState(false)
+  const [isCustomType, setIsCustomType] = useState(false)
+  const [isCustomLocation, setIsCustomLocation] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const { toast } = useToast()
 
@@ -77,7 +80,7 @@ export default function InsulinTracker() {
           })
         }
         setNewShot({
-          date: '',
+          date: new Date().toISOString().split('T')[0],
           brand: '',
           type: '',
           amountMl: '',
@@ -122,8 +125,26 @@ export default function InsulinTracker() {
     setShotsTaken(0)
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setNewShot(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  const handleBrandChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    setIsCustomBrand(value === 'Custom')
+    setNewShot(prev => ({ ...prev, brand: value === 'Custom' ? '' : value }))
+  }
+
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    setIsCustomType(value === 'Custom')
+    setNewShot(prev => ({ ...prev, type: value === 'Custom' ? '' : value }))
+  }
+
+  const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    setIsCustomLocation(value === 'Custom')
+    setNewShot(prev => ({ ...prev, location: value === 'Custom' ? '' : value }))
   }
 
   const remainingShots = Math.floor(remainingInsulin / SHOT_SIZE)
@@ -143,11 +164,25 @@ export default function InsulinTracker() {
           </div>
           <div>
             <Label htmlFor="brand">Brand</Label>
-            <Input type="text" id="brand" name="brand" value={newShot.brand} onChange={handleInputChange} />
+            <select id="brand" name="brand" value={newShot.brand} onChange={handleBrandChange} className="w-full p-2 border rounded">
+              <option value="">Select Brand</option>
+              <option value="SP">SP</option>
+              <option value="Custom">Custom</option>
+            </select>
+            {isCustomBrand && (
+              <Input type="text" name="brand" value={newShot.brand} onChange={handleInputChange} placeholder="Enter custom brand" className="mt-2" />
+            )}
           </div>
           <div>
             <Label htmlFor="type">Type</Label>
-            <Input type="text" id="type" name="type" value={newShot.type} onChange={handleInputChange} />
+            <select id="type" name="type" value={newShot.type} onChange={handleTypeChange} className="w-full p-2 border rounded">
+              <option value="">Select Type</option>
+              <option value="Enanthate">Enanthate</option>
+              <option value="Custom">Custom</option>
+            </select>
+            {isCustomType && (
+              <Input type="text" name="type" value={newShot.type} onChange={handleInputChange} placeholder="Enter custom type" className="mt-2" />
+            )}
           </div>
           <div>
             <Label htmlFor="amountMl">Amount (ml)</Label>
@@ -159,7 +194,17 @@ export default function InsulinTracker() {
           </div>
           <div>
             <Label htmlFor="location">Location</Label>
-            <Input type="text" id="location" name="location" value={newShot.location} onChange={handleInputChange} />
+            <select id="location" name="location" value={newShot.location} onChange={handleLocationChange} className="w-full p-2 border rounded">
+              <option value="">Select Location</option>
+              <option value="VG-D">VG-D</option>
+              <option value="VG-S">VG-S</option>
+              <option value="DT-D">DT-D</option>
+              <option value="DT-S">DT-S</option>
+              <option value="Custom">Custom</option>
+            </select>
+            {isCustomLocation && (
+              <Input type="text" name="location" value={newShot.location} onChange={handleInputChange} placeholder="Enter custom location" className="mt-2" />
+            )}
           </div>
         </div>
         <Button onClick={registerShot} className="w-full mt-4">{editingId ? 'Update' : 'Register'} Shot</Button>
